@@ -72,7 +72,7 @@ def load_training_model(
         embed_folder,
         max_batch_size=max_batch_size,
         pipe_args=train_args.pipeline,
-        args_type="llama",
+        args_type=train_args.embedder_type,
     )
 
     # Load pretrained params on rank 0
@@ -84,13 +84,14 @@ def load_training_model(
         param_dtype=param_dtype,
         for_embedding=True,
         number_of_llm=len(llms),
+        embedder_type=train_args.embedder_type,
     )
 
     # Create the pipeline
     augmented_pipeline = EmbedAugPipeline(
         pipeline_args=pipeline_args,
         llm_tokenizer=llm_tokenizers,
-        embed_tokenizer=Tokenizer(embed_tokenizer, model_name="llama"),
+        embed_tokenizer=Tokenizer(embed_tokenizer, model_name=train_args.embedder_type),
         embedding_model=llm_embedder,
     )
 
@@ -283,7 +284,7 @@ def load_training_model_from_ckpt(
         embed_folder,
         max_batch_size=max_batch_size,
         pipe_args=train_args.pipeline,
-        args_type="llama",
+        args_type=train_args.embedder_type,
     )
     # Load pretrained params on rank 0
     llm_embedder, embed_tokenizer = load_model(
@@ -294,6 +295,7 @@ def load_training_model_from_ckpt(
         param_dtype=param_dtype,
         for_embedding=True,
         number_of_llm=len(llms),
+        embedder_type=train_args.embedder_type,
         skip_model_loading=True,  # Do not load the backbone weights except if you want to use a partially trained embedder
         # in that case, the trained layers will be loaded below on top of the backbone. 
     )
@@ -302,7 +304,7 @@ def load_training_model_from_ckpt(
     augmented_pipeline = EmbedAugPipeline(
         pipeline_args=pipeline_args,
         llm_tokenizer=llm_tokenizers,
-        embed_tokenizer=Tokenizer(embed_tokenizer, model_name='llama'),
+        embed_tokenizer=Tokenizer(embed_tokenizer, model_name=train_args.embedder_type),
         embedding_model=llm_embedder,
     )
 

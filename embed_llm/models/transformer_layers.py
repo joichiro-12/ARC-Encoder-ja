@@ -15,6 +15,18 @@ from embed_llm.models.utils.cache import CacheView
 from embed_llm.models.utils.rope import apply_rotary_emb
 
 
+def attention_op(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, attn_bias=None) -> torch.Tensor:
+    """xformers has no CPU operator in float32. The CPU path serves the tests and the small checks."""
+    if q.device.type != "cpu":
+        return memory_efficient_attention(q, k, v, attn_bias)
+    # (B, S, H, D) -> (B, H, S, D)
+    q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
+    scores = q @ k.transpose(-1, -2) / q.shape[-1] ** 0.5
+    if attn_bias is not None:
+        scores = scores + attn_bias.materialize(scores.shape, dtype=scores.dtype, device=scores.device)
+    return (scores.softmax(dim=-1) @ v).transpose(1, 2).contiguous()
+
+
 def repeat_kv(
     keys: torch.Tensor, values: torch.Tensor, repeats: int, dim: int
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -172,7 +184,7 @@ class Attention(nn.Module):
 
         # xformers requires (B=1, S, H, D)
         xq, key, val = xq[None, ...], key[None, ...], val[None, ...]
-        output = memory_efficient_attention(
+        output = attention_op(
             xq, key, val, mask if cache is None else cache.mask
         )
         output = output.view(seqlen_sum, self.n_heads * self.head_dim)

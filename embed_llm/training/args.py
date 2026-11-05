@@ -62,6 +62,8 @@ class TrainArgs(Serializable):
     # Name of the wandb run, if None it will be set to the name of the run_dir.
     data: DataArgs
 
+    # Family of the encoder backbone: "llama" or "llmjp4". It decides the encoder tokenizer.
+    embedder_type: str = "llama"
     exp_name: str | None = None
     optim: OptimArgs = field(default_factory=OptimArgs)
     seed: int = 0
