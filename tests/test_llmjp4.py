@@ -20,6 +20,7 @@ from embed_llm.models.args import PipelineArgs
 from embed_llm.models.augmented_model import EmbedAugModel, EmbedAugPipeline
 from embed_llm.models.enhanced_transformer import Transformer
 from embed_llm.models.utils.hf_tokenizer import Tokenizer
+from embed_llm.training.distributed import visible_devices
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("convert_hf_to_arc", ROOT / "scripts/llmjp4/convert_hf_to_arc.py")
@@ -302,3 +303,8 @@ def test_check_file_counts_the_bad_lines(tmp_path):
     path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
     result = prepare_data.check_file(path, {"passage", "question", "answer"})
     assert (result["lines"], result["bad"], result["chars"]) == (3, 2, 2)
+
+
+def test_visible_devices_accepts_the_uuids_of_abci(monkeypatch):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "GPU-9aa12bd0,GPU-138503ea")
+    assert visible_devices() == ["GPU-9aa12bd0", "GPU-138503ea"]
