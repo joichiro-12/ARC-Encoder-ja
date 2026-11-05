@@ -289,3 +289,11 @@ def test_generation_for_each_condition(condition):
         temperature=0,
     )
     assert len(outputs) == 2 and all(isinstance(o, str) for o in outputs)
+
+
+def test_check_file_counts_the_bad_lines(tmp_path):
+    path = tmp_path / "a.jsonl"
+    rows = [{"passage": "文書", "question": "問", "answer": "答"}, {"passage": "文書", "question": "", "answer": "答"}, {"text": "x"}]
+    path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+    result = prepare_data.check_file(path, {"passage", "question", "answer"})
+    assert (result["lines"], result["bad"], result["chars"]) == (3, 2, 2)

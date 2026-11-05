@@ -1,6 +1,6 @@
 #!/bin/bash
-# CPU work on ABCI: converting the models and building the data.
-#   qsub -q rt_HC -N 0374_arc_data -v STEP="scripts/llmjp4/prepare_data.py pretrain" scripts/llmjp4/run_cpu.pbs
+# CPU work on ABCI. STEP is one of: models, pretrain, finetune, eval, check.
+# See docs/llmjp4.md for the submission commands.
 #PBS -P gcg51557
 #PBS -l select=1
 #PBS -l walltime=12:00:00
@@ -12,7 +12,15 @@ source scripts/llmjp4/env.sh
 export HF_HUB_OFFLINE=1
 echo "===== $(date) $(hostname) $(git rev-parse --short HEAD) $STEP"
 case "$STEP" in
-  *prepare_data.py*) .venv/bin/python $STEP --out_dir "$ARC_DATA_PATH" ;;
-  *) .venv/bin/python $STEP ;;
+  models)
+    .venv/bin/python scripts/llmjp4/setup_models.py
+    for name in llm-jp-4-8b-base llm-jp-4-8b-instruct; do
+      snapshot=$(ls -d "$HF_HOME"/hub/models--llm-jp--$name/snapshots/* | head -1)
+      .venv/bin/python scripts/llmjp4/check_conversion.py --hf_dir "$snapshot" --arc_dir "$ARC_MODEL_PATH$name" --device cpu
+    done
+    ;;
+  *)
+    .venv/bin/python scripts/llmjp4/prepare_data.py "$STEP" --out_dir "$ARC_DATA_PATH"
+    ;;
 esac
 date

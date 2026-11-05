@@ -3,6 +3,7 @@
     python scripts/llmjp4/prepare_data.py pretrain --out_dir <DATA_PATH>
     python scripts/llmjp4/prepare_data.py finetune --out_dir <DATA_PATH>
     python scripts/llmjp4/prepare_data.py eval --out_dir <DATA_PATH>
+    python scripts/llmjp4/prepare_data.py check --out_dir <DATA_PATH>
 
 Pretraining lines hold {"text"}. Fine-tuning lines hold {"passage", "question", "answer"}.
 Evaluation lines hold {"passage", "question", "answers"}.
@@ -11,8 +12,10 @@ Evaluation lines hold {"passage", "question", "answers"}.
 import argparse
 import gzip
 import json
+import os
 import random
 import re
+import sys
 from multiprocessing import Pool
 from pathlib import Path
 
@@ -20,7 +23,7 @@ EXPERIMENTS = Path("/groups/gcg51557/experiments")
 CORPUS = EXPERIMENTS / "0118_dedup_corpusv4_ja/data/all/cleaned"
 LLM_JP_EVAL = EXPERIMENTS / "0272_llmjpeval/codes/llm-jp-eval-v2.1.3/local_files/datasets/raw_files"
 INSTRUCT4 = EXPERIMENTS / "0290_instruct5_dataset/datasets/instruct4"
-FINEWEB = EXPERIMENTS / "0352_fineweb_translate/corpus"
+FINEWEB = EXPERIMENTS / "0352_fineweb_translate"
 KAME = EXPERIMENTS / "0374_japanese_kame"
 MOSHIRAG = [KAME / "wiki_gemma4/s02", KAME / "wiki_gemma4_b/s02", KAME / "wiki_gemma4_v2/s02"]
 
@@ -189,17 +192,21 @@ def translation_rows(n_fineweb: int, seed: int) -> list[dict]:
                 user = next(m["content"] for m in sample["messages"] if m["role"] == "user")
                 reply = next(m["content"] for m in sample["messages"] if m["role"] == "assistant")
                 rows.append({"passage": user.split("### 入力:", 1)[-1].strip(), "question": TO_ENGLISH, "answer": reply.strip()})
-    # FineWeb: `original` and `translated` are aligned line by line
-    translated = sorted((FINEWEB / "translated/en_fineweb").glob("score_30/*len004096.jsonl.gz"))
+    # FineWeb: `corpus/original` and `corpus_v2/translated` are aligned line by line.
+    # corpus_v2 tells the translations cut by the length limit, through finish_reason.
+    translated = sorted((FINEWEB / "corpus_v2/translated/en_fineweb").glob("score_30/*len004096.jsonl.gz"))
     rng.shuffle(translated)
     taken = 0
     for path in translated:
         with gzip.open(path, "rt", encoding="utf-8") as ja_file, gzip.open(
-            FINEWEB / "original/en_fineweb" / path.parent.name / path.name, "rt", encoding="utf-8"
+            FINEWEB / "corpus/original/en_fineweb" / path.parent.name / path.name, "rt", encoding="utf-8"
         ) as en_file:
             for ja_line, en_line in zip(ja_file, en_file):
-                ja, en = json.loads(ja_line)["text"].strip(), json.loads(en_line)["text"].strip()
-                if 100 <= len(ja) <= 1500 and rng.random() < 0.02:
+                record = json.loads(ja_line)
+                if record["metadata"]["finish_reason"] != "stop" or rng.random() >= 0.02:
+                    continue
+                ja, en = record["text"].strip(), json.loads(en_line)["text"].strip()
+                if 100 <= len(ja) <= 1500:
                     rows.append({"passage": ja, "question": TO_ENGLISH, "answer": en})
                     taken += 1
                     if taken >= n_fineweb:
@@ -257,9 +264,64 @@ def prepare_eval(args) -> None:
     )
 
 
+def check_file(path: Path, required: set[str], tokenizer=None, n_sample: int = 2000) -> dict:
+    """Counts the lines, and the lines that miss a field or leave it empty."""
+    main_field = "text" if "text" in required else "passage"
+    lines = bad = chars = 0
+    sample = []
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            row = json.loads(line)
+            lines += 1
+            if required <= row.keys() and all(row[key] for key in required):
+                chars += len(row[main_field])
+                if len(sample) < n_sample:
+                    sample.append(row[main_field])
+            else:
+                bad += 1
+    result = {"file": str(path), "lines": lines, "bad": bad, "gb": round(path.stat().st_size / 1e9, 3), "chars": chars}
+    if tokenizer is not None and sample:
+        ratio = sum(len(tokenizer.encode(text)) for text in sample) / sum(len(text) for text in sample)
+        result["tokens_per_char"] = round(ratio, 4)
+        result["tokens"] = int(chars * ratio)
+    return result
+
+
+EXPECTED_FILES = {
+    "pretrain": list(PRETRAIN_SOURCES),
+    "finetune": ["autowikiqa", "jsquad", "jaquad", "moshirag_refs", "extraction", "wiki_summary", "ja_to_en"],
+    "eval": ["jsquad", "jaquad", "jqara", "moshirag_refs"] + [f"holdout_{name}" for name in PRETRAIN_SOURCES],
+}
+REQUIRED_FIELDS = {
+    "pretrain": {"text"},
+    "finetune": {"passage", "question", "answer"},
+    "eval": {"passage", "question", "answers"},
+}
+
+
+def prepare_check(args) -> None:
+    from embed_llm.models.utils.hf_tokenizer import Tokenizer
+
+    tokenizer = Tokenizer(Path(os.environ["ARC_MODEL_PATH"]) / "llm-jp-4-8b-base/tokenizer.json")
+    failed = []
+    for folder, names in EXPECTED_FILES.items():
+        for name in names:
+            path = args.out_dir / folder / f"{name}.jsonl"
+            required = {"text"} if name.startswith("holdout_") else REQUIRED_FIELDS[folder]
+            if not path.exists():
+                failed.append(f"{path}: missing")
+                continue
+            result = check_file(path, required, tokenizer)
+            print(json.dumps(result, ensure_ascii=False), flush=True)
+            if result["lines"] == 0 or result["bad"] > result["lines"] * 0.001:
+                failed.append(f"{path}: {result['bad']} bad lines of {result['lines']}")
+    print("\n".join(failed) if failed else "all files passed")
+    sys.exit(1 if failed else 0)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("step", choices=["pretrain", "finetune", "eval"])
+    parser.add_argument("step", choices=["pretrain", "finetune", "eval", "check"])
     parser.add_argument("--out_dir", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--total_tokens", type=float, default=5e9)
@@ -267,7 +329,7 @@ def main():
     parser.add_argument("--max_summaries", type=int, default=200000)
     parser.add_argument("--n_fineweb", type=int, default=100000)
     args = parser.parse_args()
-    {"pretrain": prepare_pretrain, "finetune": prepare_finetune, "eval": prepare_eval}[args.step](args)
+    {"pretrain": prepare_pretrain, "finetune": prepare_finetune, "eval": prepare_eval, "check": prepare_check}[args.step](args)
 
 
 if __name__ == "__main__":
