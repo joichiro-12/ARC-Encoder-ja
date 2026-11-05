@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from tokenizers import Tokenizer as HFTokenizer
+from tokenizers.normalizers import Replace
 
 # Backbone families read from a tokenizer.json, with their (bos, eos) tokens
 HF_FAMILIES = {
@@ -19,9 +20,15 @@ class Tokenizer:
         self.bos_id = self.model.token_to_id(bos_token)
         self.eos_id = self.model.token_to_id(eos_token)
         assert None not in (self.bos_id, self.eos_id), tokenizer_path
+        # The normalizer of llm-jp-4 puts "▁" at the start of every text. Only the start of a sequence
+        # has it in the normal use of the model, so the pieces of a prompt go without it.
+        self.piece_model = self.model
+        if family == "llmjp4":
+            self.piece_model = HFTokenizer.from_file(str(tokenizer_path))
+            self.piece_model.normalizer = Replace(" ", "▁")
 
     def encode(self, s: str, bos: bool = False, eos: bool = False) -> list[int]:
-        ids = self.model.encode(s, add_special_tokens=False).ids
+        ids = (self.model if bos else self.piece_model).encode(s, add_special_tokens=False).ids
         if bos:
             ids = [self.bos_id] + ids
         if eos:

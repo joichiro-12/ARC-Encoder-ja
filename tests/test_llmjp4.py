@@ -192,6 +192,11 @@ def test_real_tokenizer_round_trip():
         ids = tokenizer.encode(text, bos=True, eos=True)
         assert ids[0] == 1 and ids[-1] == 2
         assert tokenizer.decode(ids) == text
+    # A prompt cut into pieces gives the same tokens as the whole prompt, with no space at the cuts
+    whole = tokenizer.encode("文書：\n質問：天気は？\n答え：晴れ", bos=True)
+    pieces = tokenizer.encode("文書：", bos=True) + tokenizer.encode("\n質問：天気は？\n答え：晴れ", bos=False)
+    assert pieces == whole
+    assert tokenizer.encode("東京 大阪", bos=False) != tokenizer.encode("東京大阪", bos=False)  # A real space stays
 
 
 def test_eval_prompts_put_each_document_between_the_pieces():
