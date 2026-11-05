@@ -136,7 +136,8 @@ def jaquad_rows(split: str) -> list[dict]:
     from datasets import load_dataset
 
     rows = []
-    for ex in load_dataset("SkelterLabsInc/JaQuAD", split=split):
+    # The main revision holds a loading script, which the datasets library no longer runs
+    for ex in load_dataset("SkelterLabsInc/JaQuAD", revision="refs/convert/parquet", split=split):
         if ex["answers"]["text"]:
             rows.append({"passage": ex["context"], "question": ex["question"], "answers": list(ex["answers"]["text"])})
     return rows

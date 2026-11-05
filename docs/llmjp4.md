@@ -25,7 +25,7 @@ mkdir -p logs
 
 # On a login node, for the downloads
 .venv/bin/python scripts/llmjp4/setup_models.py --download
-.venv/bin/python -c "from datasets import load_dataset as d; d('cl-nagoya/auto-wiki-qa'); d('hotchpotch/JQaRA'); d('SkelterLabsInc/JaQuAD')"
+.venv/bin/python -c "from datasets import load_dataset as d; d('cl-nagoya/auto-wiki-qa'); d('hotchpotch/JQaRA'); d('SkelterLabsInc/JaQuAD', revision='refs/convert/parquet')"
 
 # CPU jobs
 qsub -q rt_HC -N 0374_arc_models -v STEP="scripts/llmjp4/setup_models.py" scripts/llmjp4/run_cpu.pbs
