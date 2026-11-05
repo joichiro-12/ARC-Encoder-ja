@@ -1,0 +1,18 @@
+#!/bin/bash
+# CPU work on ABCI: converting the models and building the data.
+#   qsub -q rt_HC -N 0374_arc_data -v STEP="scripts/llmjp4/prepare_data.py pretrain" scripts/llmjp4/run_cpu.pbs
+#PBS -P gcg51557
+#PBS -l select=1
+#PBS -l walltime=12:00:00
+#PBS -j oe
+#PBS -o logs/
+set -eu
+cd "$PBS_O_WORKDIR"
+source scripts/llmjp4/env.sh
+export HF_HUB_OFFLINE=1
+echo "===== $(date) $(hostname) $(git rev-parse --short HEAD) $STEP"
+case "$STEP" in
+  *prepare_data.py*) .venv/bin/python $STEP --out_dir "$ARC_DATA_PATH" ;;
+  *) .venv/bin/python $STEP ;;
+esac
+date

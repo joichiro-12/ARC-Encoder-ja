@@ -8,4 +8,4 @@ requirements.txt
 .python-version
 config
 scripts/*old.sh
-tests.ipynb
+tests.ipynblogs/
