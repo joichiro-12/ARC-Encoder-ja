@@ -27,12 +27,12 @@ mkdir -p logs
 .venv/bin/python scripts/llmjp4/setup_models.py --download
 .venv/bin/python -c "from datasets import load_dataset as d; d('cl-nagoya/auto-wiki-qa'); d('hotchpotch/JQaRA'); d('SkelterLabsInc/JaQuAD', revision='refs/convert/parquet')"
 
-# CPU jobs. The check waits for the data
-qsub -q rt_HC -N 0374_arc_models -l walltime=02:00:00 -v STEP=models scripts/llmjp4/run_cpu.pbs
+# CPU jobs. The check waits for the data, and for the tokenizer that the first job copies
+M=$(qsub -q rt_HC -N 0374_arc_models -l walltime=02:00:00 -v STEP=models scripts/llmjp4/run_cpu.pbs)
 P=$(qsub -q rt_HC -N 0374_arc_pre -l walltime=06:00:00 -v STEP=pretrain scripts/llmjp4/run_cpu.pbs)
 F=$(qsub -q rt_HC -N 0374_arc_ft -l walltime=04:00:00 -v STEP=finetune scripts/llmjp4/run_cpu.pbs)
 E=$(qsub -q rt_HC -N 0374_arc_eval -l walltime=01:00:00 -v STEP=eval scripts/llmjp4/run_cpu.pbs)
-qsub -q rt_HC -N 0374_arc_chk -l walltime=01:00:00 -W depend=afterany:$P:$F:$E -v STEP=check scripts/llmjp4/run_cpu.pbs
+qsub -q rt_HC -N 0374_arc_chk -l walltime=01:00:00 -W depend=afterany:$M:$P:$F:$E -v STEP=check scripts/llmjp4/run_cpu.pbs
 
 # Training (one node each)
 qsub -q rt_HF -N 0374_arc_pre16 -v CONFIG=configs/llmjp4/pretrain_arc8_16layers.yaml scripts/llmjp4/train.pbs
