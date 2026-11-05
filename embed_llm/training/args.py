@@ -98,7 +98,7 @@ class TrainArgs(Serializable):
     pipeline: PipelineArgs = field(default_factory=PipelineArgs)
     mixed_precision: bool = True
     # With mixed_precision, keep the weights in float32 for the optimizer and compute in bfloat16.
-    # xformers has its fastest attention (FlashAttention) only for 16-bit floats.
+    # A pretraining step on H200 took 1.24 s instead of 7.47 s, with the same loss (docs/llmjp4.md).
     bf16_compute: bool = False
     from_ckpt: CkptArgs = field(default_factory=CkptArgs)
     fair_instruct: bool = False  # If True, the model will be trained with fair-instruct. (each sample is used several, one for every decoder)

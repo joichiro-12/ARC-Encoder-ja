@@ -21,6 +21,7 @@ freeze_embedder: true
 prob_forward:
 - 1.0
 continuation: 0.0
+bf16_compute: true
 num_microbatches: 1
 seed: 0
 max_steps: 8000

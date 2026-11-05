@@ -9,6 +9,8 @@ This branch trains an ARC-Encoder for Japanese. The encoder is the first 16 laye
 | `embed_llm/models/utils/hf_tokenizer.py` | Reads a `tokenizer.json`, with the interface of the other tokenizers |
 | `embed_llm/models/utils/loading.py`, `wrapped_models_training.py`, `augmented_model.py` | New backbone families `llmjp4` and `llama_hf`. The new `embedder_type` setting replaces the hard-coded Llama encoder |
 | `embed_llm/data/` | The `language` setting chooses the words of the few-shot template (`Document:` or `文書：`) |
+| `embed_llm/training/args.py`, `wrapped_models_training.py` | The new `bf16_compute` setting keeps the weights in float32 and computes in bfloat16 |
+| `embed_llm/training/distributed.py` | Accepts the GPU UUIDs that ABCI gives |
 | `embed_llm/models/transformer_layers.py` | A CPU path for attention, for the tests. xformers has no float32 operator on CPU |
 | `embed_llm/generation/eval_ja.py` | Closed-book, open-book and compressed QA on Japanese data, with the retention |
 | `scripts/llmjp4/` | Weight conversion, model setup, data preparation and ABCI job scripts |
@@ -45,6 +47,17 @@ qsub -q rt_HG -N 0374_arc_ev_base -l walltime=06:00:00 -W depend=afterany:$T -v 
 # Pretraining (one node each)
 qsub -q rt_HF -N 0374_arc_pre16 -v CONFIG=configs/llmjp4/pretrain_arc8_16layers.yaml scripts/llmjp4/train.pbs
 ```
+
+## Speed on ABCI
+
+Seconds per step on one `rt_HF` node (8 H200), over the first steps with the same seed:
+
+| Run | float32 | float32, `checkpoint: false` | `bf16_compute` | `bf16_compute`, `checkpoint: false` |
+| --- | --- | --- | --- | --- |
+| Pretraining (16 layers, x8) | 7.47 | 5.87 | 1.24 | 0.96 |
+| Baseline | 20.55 | not run | 2.63 | out of memory |
+
+The settings here use `bf16_compute`, and `checkpoint: false` for the pretraining only. On the first 60 steps, the loss stays within 0.01 of float32. The attention alone does not explain the gap: one forward and backward call takes 1.5 ms in float32 (`cutlassF`) and 0.8 ms in bfloat16 (`flshattF`), with 3,584 tokens on one GPU.
 
 ## Checks
 

@@ -17,6 +17,7 @@ embedder_path: ${MODEL_PATH}llm-jp-4-8b-base
 embedder_type: llmjp4
 
 # Training Hyperparameters (paper, Table 17)
+bf16_compute: true
 num_microbatches: 1
 seed: 0
 max_steps: 4000
