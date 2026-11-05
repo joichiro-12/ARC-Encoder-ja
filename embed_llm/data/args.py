@@ -26,6 +26,7 @@ class DataArgs(Serializable):
     instruct: bool = False  # Precise if the data contains instructions (question, answer, passages) or is for pretraining (text).
     interleave: bool = False  # If True, compressed sequences and text will be interleaved during fine-tuning (in the few-shot samples case)
     # or seq_len text will be inserted before compressed sequence for continuation pretraining.
+    language: str = "en"  # Words of the few-shot template: "en" or "ja".
     prefix_path: str | None = (
         None  # If set, the prefix path will be prepended to each datapath.
     )

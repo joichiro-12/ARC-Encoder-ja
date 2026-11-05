@@ -15,6 +15,7 @@ from embed_llm.data.sequence_iterators import (
     sequence_iterator_reconstruction,
 )
 from embed_llm.data.tokenize import Mask, Tokenizer, TokenSample, encode
+from embed_llm.data.utils import PROMPT_LABELS, PromptLabels
 from embed_llm.training.distributed import get_rank
 
 logger = logging.getLogger("dataset")
@@ -141,6 +142,7 @@ def sequence_iterator(
     chunk_to: int | None = None,
     instruct_decoder: bool = False,  # If True, the decoder will be used for instruction data.
     max_chunks: int = 5,
+    labels: PromptLabels = PROMPT_LABELS["en"],
 ) -> Iterator[SequenceEmbedMaskAndSizes]:
     """
     Creates sequences of length `seq_len` from the dataset iterator by concatenating samples.
@@ -249,6 +251,7 @@ def sequence_iterator(
                     chunk_to=chunk_to,
                     instruct_prompt=instruct_prompt if instruct_decoder else None,
                     max_chunks=max_chunks,
+                    labels=labels,
                 )
 
                 if len(res) == 2 and isinstance(res[0], SequenceEmbedMaskAndSizes):
@@ -332,6 +335,7 @@ def build_dataset(
             max_passages=args.max_passages,
             instruct_decoder=args.instruct_decoder,
             instruct=args.instruct,
+            labels=PROMPT_LABELS[args.language],
         )
         for source in sources
     ]
@@ -350,6 +354,7 @@ def build_dataset(
             chunk_to=args.chunk_to,
             instruct_decoder=args.instruct_decoder,
             max_chunks=args.max_chunks,
+            labels=PROMPT_LABELS[args.language],
         )
         for fs, it in zip(few_shots, dataset_iterators)
     ]
@@ -384,6 +389,7 @@ def get_dataset_iterator(
     max_passages: int = 1,
     instruct: bool = False,
     instruct_decoder: bool = False,  # If True, the decoder will be used for instruction data
+    labels: PromptLabels = PROMPT_LABELS["en"],
 ) -> Iterator[TokenSample]:
     jsonl_files = source.jsonl_files
 
@@ -400,6 +406,7 @@ def get_dataset_iterator(
                 max_passages=max_passages,
                 instruct_decoder=instruct_decoder,
                 instruct=instruct,
+                labels=labels,
             )
         if is_finite:
             break
@@ -414,6 +421,7 @@ def lazy_load_and_yield(
     max_passages: int = 1,
     instruct: bool = False,
     instruct_decoder: bool = False,  # If True, the decoder will be used for instruction data
+    labels: PromptLabels = PROMPT_LABELS["en"],
 ):
     with jsonl_file.open() as file_handle:
         for idx, line in enumerate(file_handle):
@@ -434,6 +442,7 @@ def lazy_load_and_yield(
                 max_passages=max_passages,
                 instruct=instruct,
                 instruct_decoder=instruct_decoder,
+                labels=labels,
             )
 
 

@@ -2,7 +2,12 @@ import dataclasses
 import numpy as np
 import re
 from embed_llm.data.tokenize import Mask, TokenSample, Tokenizer
-from embed_llm.data.utils import RECONSTRUCTION_INSTRUCT, CONTINUATION_INSTRUCT
+from embed_llm.data.utils import (
+    CONTINUATION_INSTRUCT,
+    PROMPT_LABELS,
+    RECONSTRUCTION_INSTRUCT,
+    PromptLabels,
+)
 
 
 @dataclasses.dataclass()
@@ -66,6 +71,7 @@ def sequence_iterator_reconstruction(
     chunk_to: int | None = None,
     max_chunks: int = 5,
     instruct_prompt: list[str] | None = None,
+    labels: PromptLabels = PROMPT_LABELS["en"],
 ) -> SequenceEmbedMaskAndSizes:
     """
     Creates sequences of length `seq_len` from the dataset iterator by concatenating samples.
@@ -155,28 +161,28 @@ def sequence_iterator_reconstruction(
                 if instruct_prompt is None or instruction is None:
                     # Create few-shot examples from same dataset
                     if few_shot_instruct is None:
-                        prefix = "Document: "
+                        prefix = labels.doc_prefix
                     else:
                         prefix = "\n\n".join(few_shot_instruct)
                         prefix = (
-                            prefix + "\n\nDocument: "
+                            prefix + "\n\n" + labels.doc_prefix
                             if len(prefix) > 0
-                            else "Document: "
+                            else labels.doc_prefix
                         )
                     added_prefix = 0
-                    splits = re.split(r"\n\nDocument:|\nQuestion:", prefix)
+                    splits = re.split(labels.split_pattern, prefix)
                     if interleave and len(splits) > 1:
                         ins_list = []
                         embed_toks = []
                         embed_text = []
                         doc_tokens = llm_tokenizer.tokenizer.encode(
-                            "Document: ", bos=True, eos=False
+                            labels.doc_prefix, bos=True, eos=False
                         )
                         ins_list.append(len(doc_tokens))
                         x_buffer.extend(doc_tokens)
                         y_buffer.extend(doc_tokens[1:])
                         for i, split in enumerate(splits):
-                            split = split.replace("Document: ", "").strip()
+                            split = split.replace(labels.doc_prefix, "").strip()
                             if split == "":
                                 continue
                             if i % 2 == 0:  # First part is the document
@@ -203,7 +209,7 @@ def sequence_iterator_reconstruction(
                                 i < len(splits) - 1
                             ):  # Second part is the question and answer which should not be compressed
                                 doc_tokens = llm_tokenizer.tokenizer.encode(
-                                    "\nQuestion: " + split.strip() + "\n\nDocument: ",
+                                    labels.question_prefix + split.strip() + "\n\n" + labels.doc_prefix,
                                     bos=False,
                                     eos=False,
                                 )
@@ -213,7 +219,7 @@ def sequence_iterator_reconstruction(
 
                             else:
                                 doc_tokens = llm_tokenizer.tokenizer.encode(
-                                    "\nQuestion: " + split.strip(), bos=False, eos=False
+                                    labels.question_prefix + split.strip(), bos=False, eos=False
                                 )
                                 ins_list.append(len(doc_tokens))
                                 x_buffer.extend(doc_tokens)
@@ -279,7 +285,7 @@ def sequence_iterator_reconstruction(
                             ]
                         )
 
-                        new_ex = "Document: " + new_embed_text + question + answer
+                        new_ex = labels.doc_prefix + new_embed_text + question + answer
 
                         if len(few_shot_instruct) < few_shot:
                             few_shot_instruct.append(new_ex)
