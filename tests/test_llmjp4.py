@@ -5,6 +5,7 @@ import json
 import math
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -20,6 +21,7 @@ from embed_llm.models.args import PipelineArgs
 from embed_llm.models.augmented_model import EmbedAugModel, EmbedAugPipeline
 from embed_llm.models.enhanced_transformer import Transformer
 from embed_llm.models.utils.hf_tokenizer import Tokenizer
+from embed_llm.models.wrapped_models_training import fsdp_precision
 from embed_llm.training.distributed import visible_devices
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -308,3 +310,12 @@ def test_check_file_counts_the_bad_lines(tmp_path):
 def test_visible_devices_accepts_the_uuids_of_abci(monkeypatch):
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "GPU-9aa12bd0,GPU-138503ea")
     assert visible_devices() == ["GPU-9aa12bd0", "GPU-138503ea"]
+
+
+@pytest.mark.parametrize(
+    "mixed_precision, bf16_compute, param_dtype",
+    [(True, False, torch.float32), (False, False, torch.bfloat16), (True, True, torch.bfloat16)],
+)
+def test_fsdp_computes_in_the_chosen_dtype(mixed_precision, bf16_compute, param_dtype):
+    args = SimpleNamespace(mixed_precision=mixed_precision, bf16_compute=bf16_compute)
+    assert fsdp_precision(args).param_dtype == param_dtype

@@ -1,7 +1,7 @@
 from pathlib import Path
 import math
 import torch
-from torch.distributed.fsdp import BackwardPrefetch
+from torch.distributed.fsdp import BackwardPrefetch, MixedPrecision
 from torch.distributed.fsdp.api import ShardingStrategy
 from torch.distributed.fsdp.fully_sharded_data_parallel import FullyShardedDataParallel
 
@@ -27,6 +27,13 @@ from embed_llm.training.mixed_precision import (
     bfSixteen,
     bfSixteen_mixed,
 )
+
+
+def fsdp_precision(train_args: TrainArgs) -> MixedPrecision:
+    if train_args.bf16_compute:
+        assert train_args.mixed_precision, "bf16_compute keeps the weights in float32"
+        return bfSixteen
+    return bfSixteen_mixed if train_args.mixed_precision else bfSixteen
 
 
 # Used for training from scratch
@@ -222,7 +229,7 @@ def load_training_model(
         sharding_strategy=ShardingStrategy.FULL_SHARD,  # Gradients, activations, and parameters are sharded
         auto_wrap_policy=auto_wrap_policy,
         backward_prefetch=BackwardPrefetch.BACKWARD_PRE,  # Default param
-        mixed_precision=bfSixteen_mixed if train_args.mixed_precision else bfSixteen,
+        mixed_precision=fsdp_precision(train_args),
         limit_all_gathers=True,
         device_id=torch.cuda.current_device(),
         sync_module_states=True,  # saves cpu memory by loading pretrained model on rank0 only, not working with False
@@ -464,7 +471,7 @@ def load_training_model_from_ckpt(
         sharding_strategy=ShardingStrategy.FULL_SHARD,  # Gradients, activations, and parameters are sharded
         auto_wrap_policy=auto_wrap_policy,
         backward_prefetch=BackwardPrefetch.BACKWARD_PRE,  # Default param
-        mixed_precision=bfSixteen_mixed if train_args.mixed_precision else bfSixteen,
+        mixed_precision=fsdp_precision(train_args),
         limit_all_gathers=True,
         device_id=torch.cuda.current_device(),
         sync_module_states=True,  # saves cpu memory by loading pretrained model on rank0 only, not working with False
