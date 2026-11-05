@@ -191,7 +191,8 @@ def translation_rows(n_fineweb: int, seed: int) -> list[dict]:
             if re.match(r"(wikicorpus|alt)-j-to-e", sample["ID"]):
                 user = next(m["content"] for m in sample["messages"] if m["role"] == "user")
                 reply = next(m["content"] for m in sample["messages"] if m["role"] == "assistant")
-                rows.append({"passage": user.split("### 入力:", 1)[-1].strip(), "question": TO_ENGLISH, "answer": reply.strip()})
+                if reply.strip():
+                    rows.append({"passage": user.split("### 入力:", 1)[-1].strip(), "question": TO_ENGLISH, "answer": reply.strip()})
     # FineWeb: `corpus/original` and `corpus_v2/translated` are aligned line by line.
     # corpus_v2 tells the translations cut by the length limit, through finish_reason.
     translated = sorted((FINEWEB / "corpus_v2/translated/en_fineweb").glob("score_30/*len004096.jsonl.gz"))

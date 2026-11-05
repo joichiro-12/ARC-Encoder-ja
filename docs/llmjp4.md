@@ -34,7 +34,15 @@ F=$(qsub -q rt_HC -N 0374_arc_ft -l walltime=04:00:00 -v STEP=finetune scripts/l
 E=$(qsub -q rt_HC -N 0374_arc_eval -l walltime=01:00:00 -v STEP=eval scripts/llmjp4/run_cpu.pbs)
 qsub -q rt_HC -N 0374_arc_chk -l walltime=01:00:00 -W depend=afterany:$M:$P:$F:$E -v STEP=check scripts/llmjp4/run_cpu.pbs
 
-# Training (one node each)
+# The short run: speed and loss on one node, then the evaluation on a few questions
+T=$(qsub -q rt_HF -N 0374_arc_prelim -l walltime=03:00:00 -v CONFIG=configs/llmjp4/prelim_arc8_16layers.yaml scripts/llmjp4/train.pbs)
+qsub -q rt_HG -N 0374_arc_ev_prelim -l walltime=01:00:00 -W depend=afterany:$T -v RUN=prelim_arc8_16layers,ENCODER=llm-jp-4-8b-base,DATASET=jsquad,N_SAMPLES=200 scripts/llmjp4/eval.pbs
+
+# The baseline and its evaluation
+T=$(qsub -q rt_HF -N 0374_arc_base -l walltime=08:00:00 -v CONFIG=configs/llmjp4/finetune_baseline_arc4_frozen.yaml scripts/llmjp4/train.pbs)
+qsub -q rt_HG -N 0374_arc_ev_base -l walltime=06:00:00 -W depend=afterany:$T -v RUN=finetune_baseline_arc4_frozen,ENCODER=Llama3.2-3B-hf,DATASET=jsquad scripts/llmjp4/eval.pbs
+
+# Pretraining (one node each)
 qsub -q rt_HF -N 0374_arc_pre16 -v CONFIG=configs/llmjp4/pretrain_arc8_16layers.yaml scripts/llmjp4/train.pbs
 ```
 
