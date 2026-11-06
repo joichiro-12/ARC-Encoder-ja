@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 import torch
 from transformers import LlamaConfig, LlamaForCausalLM
@@ -28,6 +29,9 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("convert_hf_to_arc", ROOT / "scripts/llmjp4/convert_hf_to_arc.py")
 convert_hf_to_arc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(convert_hf_to_arc)
+spec = importlib.util.spec_from_file_location("encode_moshirag_refs", ROOT / "scripts/llmjp4/encode_moshirag_refs.py")
+encode_moshirag_refs = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(encode_moshirag_refs)
 spec = importlib.util.spec_from_file_location("prepare_data", ROOT / "scripts/llmjp4/prepare_data.py")
 prepare_data = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(prepare_data)
@@ -319,3 +323,31 @@ def test_visible_devices_accepts_the_uuids_of_abci(monkeypatch):
 def test_fsdp_computes_in_the_chosen_dtype(mixed_precision, bf16_compute, param_dtype):
     args = SimpleNamespace(mixed_precision=mixed_precision, bf16_compute=bf16_compute)
     assert fsdp_precision(args).param_dtype == param_dtype
+
+
+def test_encode_texts_keeps_the_order_and_the_compression():
+    torch.manual_seed(0)
+    bridge = BridgeArgs(bridge_type="mlp", in_dim=64, hidden_dim=32, out_dim=64)
+    tok = TokenizerWrapper(tokenizer=ModuloTokenizer(), model_name="llmjp4")
+    pipeline = EmbedAugPipeline(
+        pipeline_args=PipelineArgs(embedder_params=tiny_embedder(), bridge_module=bridge),
+        llm_tokenizer=[tok],
+        embed_tokenizer=tok,
+        embedding_model=Transformer(tiny_args(), embedder_args=tiny_embedder()),
+    )
+    pipeline.store_model(pipeline.get_model(llms=[Transformer(tiny_args())]))
+    pipeline.model.eval()
+    texts = ["とても長い参照の文章です。" * 3, "", "短い", "中くらいの長さの参照"]
+    vectors = encode_moshirag_refs.encode_texts(pipeline, texts, "cpu", max_batch_tokens=12)
+    assert [len(v) for v in vectors] == [math.ceil(len(t) / 4) for t in texts]
+    assert all(v.shape[1] == 64 and v.dtype == np.float16 for v in vectors)
+    # Batches of other sizes give the same vectors
+    alone = encode_moshirag_refs.encode_texts(pipeline, texts[3:], "cpu")
+    assert np.allclose(vectors[3], alone[0], atol=1e-3)
+
+
+def test_match_events_pairs_the_frames_in_order():
+    events = [{"ret_frame": 100, "reference": "a"}, {"ret_frame": 300, "reference": "b"}]
+    matched = encode_moshirag_refs.match_events([98, 200, 305], events)
+    assert matched == [events[0], None, None]
+    assert encode_moshirag_refs.match_events([100, 305], events) == events

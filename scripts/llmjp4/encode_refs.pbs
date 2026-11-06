@@ -1,0 +1,16 @@
+#!/bin/bash
+# Encoding of the MoshiRAG references on one GPU of ABCI. RUN and OUT_DIR come from the job.
+#PBS -P gcg51557
+#PBS -l select=1
+#PBS -l walltime=02:00:00
+#PBS -j oe
+#PBS -o logs/
+set -eu
+cd "$PBS_O_WORKDIR"
+source /etc/profile.d/modules.sh
+module load cuda/12.6
+source scripts/llmjp4/env.sh
+export HF_HUB_OFFLINE=1
+echo "===== $(date) $(hostname) $(git rev-parse --short HEAD) $RUN"
+.venv/bin/python scripts/llmjp4/encode_moshirag_refs.py --run_name "$RUN" --out_dir "$OUT_DIR"
+date
