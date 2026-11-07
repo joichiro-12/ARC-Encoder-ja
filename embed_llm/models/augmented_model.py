@@ -333,6 +333,7 @@ class EmbedAugPipeline(nn.Module):
         max_batch_size: int = 4,
         param_dtype: torch.dtype = torch.float32,
         llm_number: int = 0,
+        embedder_type: str = "llama",
     ):
         # When we need to load trained encoder from another ckpt than the one from ckpt_path
         # Especially when training only MLP module and special toks on a new decoder
@@ -345,6 +346,7 @@ class EmbedAugPipeline(nn.Module):
         if Path(train_config_path).exists():
             with open(train_config_path, "r") as f:
                 train_args = yaml.safe_load(f)
+            embedder_type = train_args.get("embedder_type", embedder_type)
             freeze_embedder = train_args.get(
                 "freeze_embedder", False
             ) or train_args.get("freeze_encoder", False)
@@ -383,7 +385,7 @@ class EmbedAugPipeline(nn.Module):
             Path(embedder_path),
             max_batch_size=max_batch_size,
             pipe_path=ckpt_path,
-            args_type="llama",
+            args_type=embedder_type,
         )
 
         llm_embedder, embed_tokenizer = load_model(
@@ -396,6 +398,7 @@ class EmbedAugPipeline(nn.Module):
             parll=is_torchrun(),
             llm_type=llm_type,
             number_of_llm=1,
+            embedder_type=embedder_type,
             skip_model_loading=True,  # Do not load the backbone weights except if you want to use a partially trained embedder
             # in that case, the trained layers will be loaded below on top of the backbone
         )
@@ -478,7 +481,7 @@ class EmbedAugPipeline(nn.Module):
             pipeline_args=pipeline_args,
             embedding_model=llm_embedder,
             llm_tokenizer=[Tokenizer(tokenizer=llm_tokenizer, model_name=llm_type)],
-            embed_tokenizer=Tokenizer(tokenizer=embed_tokenizer, model_name="llama"),
+            embed_tokenizer=Tokenizer(tokenizer=embed_tokenizer, model_name=embedder_type),
         )
 
         augmented_pipeline.store_model(augmented_pipeline.get_model(llms=[llm]))

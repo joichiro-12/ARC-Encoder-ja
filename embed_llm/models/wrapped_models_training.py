@@ -1,7 +1,7 @@
 from pathlib import Path
 import math
 import torch
-from torch.distributed.fsdp import BackwardPrefetch
+from torch.distributed.fsdp import BackwardPrefetch, MixedPrecision
 from torch.distributed.fsdp.api import ShardingStrategy
 from torch.distributed.fsdp.fully_sharded_data_parallel import FullyShardedDataParallel
 
@@ -27,6 +27,13 @@ from embed_llm.training.mixed_precision import (
     bfSixteen,
     bfSixteen_mixed,
 )
+
+
+def fsdp_precision(train_args: TrainArgs) -> MixedPrecision:
+    if train_args.bf16_compute:
+        assert train_args.mixed_precision, "bf16_compute keeps the weights in float32"
+        return bfSixteen
+    return bfSixteen_mixed if train_args.mixed_precision else bfSixteen
 
 
 # Used for training from scratch
@@ -72,7 +79,7 @@ def load_training_model(
         embed_folder,
         max_batch_size=max_batch_size,
         pipe_args=train_args.pipeline,
-        args_type="llama",
+        args_type=train_args.embedder_type,
     )
 
     # Load pretrained params on rank 0
@@ -84,13 +91,14 @@ def load_training_model(
         param_dtype=param_dtype,
         for_embedding=True,
         number_of_llm=len(llms),
+        embedder_type=train_args.embedder_type,
     )
 
     # Create the pipeline
     augmented_pipeline = EmbedAugPipeline(
         pipeline_args=pipeline_args,
         llm_tokenizer=llm_tokenizers,
-        embed_tokenizer=Tokenizer(embed_tokenizer, model_name="llama"),
+        embed_tokenizer=Tokenizer(embed_tokenizer, model_name=train_args.embedder_type),
         embedding_model=llm_embedder,
     )
 
@@ -221,7 +229,7 @@ def load_training_model(
         sharding_strategy=ShardingStrategy.FULL_SHARD,  # Gradients, activations, and parameters are sharded
         auto_wrap_policy=auto_wrap_policy,
         backward_prefetch=BackwardPrefetch.BACKWARD_PRE,  # Default param
-        mixed_precision=bfSixteen_mixed if train_args.mixed_precision else bfSixteen,
+        mixed_precision=fsdp_precision(train_args),
         limit_all_gathers=True,
         device_id=torch.cuda.current_device(),
         sync_module_states=True,  # saves cpu memory by loading pretrained model on rank0 only, not working with False
@@ -283,7 +291,7 @@ def load_training_model_from_ckpt(
         embed_folder,
         max_batch_size=max_batch_size,
         pipe_args=train_args.pipeline,
-        args_type="llama",
+        args_type=train_args.embedder_type,
     )
     # Load pretrained params on rank 0
     llm_embedder, embed_tokenizer = load_model(
@@ -294,6 +302,7 @@ def load_training_model_from_ckpt(
         param_dtype=param_dtype,
         for_embedding=True,
         number_of_llm=len(llms),
+        embedder_type=train_args.embedder_type,
         skip_model_loading=True,  # Do not load the backbone weights except if you want to use a partially trained embedder
         # in that case, the trained layers will be loaded below on top of the backbone. 
     )
@@ -302,7 +311,7 @@ def load_training_model_from_ckpt(
     augmented_pipeline = EmbedAugPipeline(
         pipeline_args=pipeline_args,
         llm_tokenizer=llm_tokenizers,
-        embed_tokenizer=Tokenizer(embed_tokenizer, model_name='llama'),
+        embed_tokenizer=Tokenizer(embed_tokenizer, model_name=train_args.embedder_type),
         embedding_model=llm_embedder,
     )
 
@@ -462,7 +471,7 @@ def load_training_model_from_ckpt(
         sharding_strategy=ShardingStrategy.FULL_SHARD,  # Gradients, activations, and parameters are sharded
         auto_wrap_policy=auto_wrap_policy,
         backward_prefetch=BackwardPrefetch.BACKWARD_PRE,  # Default param
-        mixed_precision=bfSixteen_mixed if train_args.mixed_precision else bfSixteen,
+        mixed_precision=fsdp_precision(train_args),
         limit_all_gathers=True,
         device_id=torch.cuda.current_device(),
         sync_module_states=True,  # saves cpu memory by loading pretrained model on rank0 only, not working with False

@@ -1,0 +1,58 @@
+# The short run of the pretraining: speed and loss over 2,000 steps, with the settings of pretrain_arc8_16layers.yaml.
+data:
+  prefix_path: ${DATA_PATH}
+  eval_data: ''
+  train_data: pretrain/ja_fineweb-2.jsonl:40,pretrain/ja_cc.jsonl:20,pretrain/ja_wiki.jsonl:20,pretrain/ja_ceek_news.jsonl:15,pretrain/ja_nwjc.jsonl:5
+  max_passages: 1
+  language: ja
+
+run_dir: ${TMP_PATH}
+llm_paths:
+- ${MODEL_PATH}llm-jp-4-8b-instruct
+llm_types:
+- llmjp4
+embedder_path: ${MODEL_PATH}llm-jp-4-8b-base
+embedder_type: llmjp4
+
+# Training Hyperparameters (paper, Table 16)
+bf16_compute: true
+checkpoint: false
+num_microbatches: 1
+seed: 0
+max_steps: 2000
+seq_len: 256
+log_freq: 50
+batch_size: 16
+ckpt_freq: 10000
+num_ckpt_keep: 10  # the 20k checkpoint decides the number of layers
+no_eval: true
+continuation: 0.8
+optim:
+  final_lr: 1.0e-10
+  initial_lr: 1.0e-20
+  max_lr: 1.0e-05
+  max_lr_projector: 5.0e-05
+  warm_up_steps: 1000
+  weight_decay: 0.1
+
+# ARC-Encoder Specific Parameters
+pipeline:
+  embedder_params:
+    causal_embedder: false
+    compress_rates:
+    - -8
+    n_truncated_layers: 16
+    pooling_module:
+      pool_type: mean_pooled_queries
+      where: before
+    trained_layers: 33
+    train_embedding_mtx: true
+    rec_tok: true
+    cont_tok: true
+  bridge_module:
+    bridge_type: mlp
+    in_dim: 4096
+    hidden_dim: 2048
+    out_dim: 4096
+
+exp_name: prelim_arc8_16layers

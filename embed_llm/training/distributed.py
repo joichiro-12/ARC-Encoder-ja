@@ -19,8 +19,9 @@ def get_world_size() -> int:
     return dist.get_world_size()
 
 
-def visible_devices() -> list[int]:
-    return [int(d) for d in os.environ["CUDA_VISIBLE_DEVICES"].split(",")]
+def visible_devices() -> list[str]:
+    # The scheduler of ABCI gives the UUIDs of the GPUs, not their numbers
+    return os.environ["CUDA_VISIBLE_DEVICES"].split(",")
 
 
 def set_device():

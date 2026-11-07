@@ -1,0 +1,20 @@
+#!/bin/bash
+# Evaluation on one GPU of ABCI. RUN, ENCODER, DATASET and N_SAMPLES (0 keeps all) come from the job.
+# See docs/llmjp4.md for the submission commands.
+#PBS -P gcg51557
+#PBS -l select=1
+#PBS -l walltime=06:00:00
+#PBS -j oe
+#PBS -o logs/
+set -eu
+cd "$PBS_O_WORKDIR"
+source /etc/profile.d/modules.sh
+module load cuda/12.6
+source scripts/llmjp4/env.sh
+export HF_HUB_OFFLINE=1
+echo "===== $(date) $(hostname) $(git rev-parse --short HEAD) $RUN $ENCODER $DATASET"
+.venv/bin/python -m embed_llm.generation.eval_ja --run_name "$RUN" \
+  --llm_path "${ARC_MODEL_PATH}llm-jp-4-8b-instruct" --embedder_path "$ARC_MODEL_PATH$ENCODER" \
+  --data "${ARC_DATA_PATH}eval/$DATASET.jsonl" --out_file "$ARC_TMP_PATH$RUN/eval_$DATASET.json" \
+  --n_samples "${N_SAMPLES:-0}"
+date

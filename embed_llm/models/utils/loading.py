@@ -22,6 +22,8 @@ from embed_llm.models.utils.mistral_tokenizer import (
     load_tokenizer as load_mistral_tokenizer,
 )
 from embed_llm.models.utils.olmo_tokenizer import Tokenizer as OlmoTokenizer
+from embed_llm.models.utils.hf_tokenizer import HF_FAMILIES
+from embed_llm.models.utils.hf_tokenizer import Tokenizer as HFFileTokenizer
 from embed_llm.training.checkpointing import Checkpointer
 from embed_llm.training.distributed import (
     get_rank,
@@ -82,7 +84,8 @@ def load_args(
     with open(folder / "params.json", "r") as f:
         args = json.loads(f.read())
 
-    if args_type == "mistral":
+    # The families read from a tokenizer.json keep explicit dimensions in params.json, like Mistral
+    if args_type == "mistral" or args_type in HF_FAMILIES:
         llm_args = ModelArgs(
             dim=args["dim"],
             n_layers=args["n_layers"],
@@ -156,6 +159,7 @@ def load_model(
     llm_type: str = "mistral",
     number_of_llm: int = 1,
     folder_w_models: str = MODEL_PATH,
+    embedder_type: str = "llama",  # Family of the encoder backbone, it decides the encoder tokenizer
     skip_model_loading: bool = False,  # No need of backbone encoder (Llama3.2-3B), to load only the architecture, 
     # the weights will be loaded from already trained ckpts such as the ARC-Encoder released on HF
 ) -> tuple[torch.nn.Module, int]:
@@ -182,6 +186,10 @@ def load_model(
             )
 
         model.load_state_dict(state_dict, assign=True, strict=False)  # type: ignore
+
+    family = embedder_type if for_embedding else llm_type
+    if family in HF_FAMILIES:
+        return model, HFFileTokenizer(Path(folder) / "tokenizer.json", family)
 
     if llm_type == "mistral" and not for_embedding:
         tokenizer = load_mistral_tokenizer(

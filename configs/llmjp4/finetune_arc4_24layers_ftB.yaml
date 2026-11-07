@@ -1,0 +1,63 @@
+# Fine-tuning of the Japanese ARC-Encoder at x4. FT-B adds them and the references of MoshiRAG, for the speech model.
+data:
+  prefix_path: ${DATA_PATH}
+  eval_data: ''
+  train_data: finetune/autowikiqa.jsonl:30:5,finetune/jsquad.jsonl:8:5,finetune/jaquad.jsonl:4:5,finetune/moshirag_refs.jsonl:28:5,finetune/extraction.jsonl:10:5,finetune/wiki_summary.jsonl:10:5,finetune/ja_to_en.jsonl:10:5
+  interleave: true
+  instruct: true
+  max_passages: 4
+  language: ja
+
+run_dir: ${TMP_PATH}
+llm_paths:
+- ${MODEL_PATH}llm-jp-4-8b-instruct
+llm_types:
+- llmjp4
+embedder_path: ${MODEL_PATH}llm-jp-4-8b-base
+embedder_type: llmjp4
+
+# Training Hyperparameters (paper, Table 17)
+bf16_compute: true
+num_microbatches: 1
+seed: 0
+max_steps: 4000
+seq_len: 2048
+log_freq: 10
+batch_size: 8
+ckpt_freq: 1000  # about 17 GB each
+no_eval: true
+optim:
+  final_lr: 1.0e-08
+  initial_lr: 1.0e-20
+  max_lr: 2.0e-06
+  max_lr_projector: 3.0e-05
+  warm_up_steps: 50
+  weight_decay: 0.05
+
+# Checkpoint to start from
+from_ckpt:
+  do: true
+  bridge_path: ${TMP_PATH}pretrain_arc8_24layers/checkpoints/checkpoint_080000/bridge_module/
+  embedder_path: ${TMP_PATH}pretrain_arc8_24layers/checkpoints/checkpoint_080000/embedder/
+
+# ARC-Encoder Specific Parameters
+pipeline:
+  embedder_params:
+    causal_embedder: false
+    compress_rates:
+    - -4
+    n_truncated_layers: 8
+    pooling_module:
+      pool_type: mean_pooled_queries
+      where: before
+    trained_layers: 33
+    train_embedding_mtx: true
+    rec_tok: true
+    cont_tok: true
+  bridge_module:
+    bridge_type: mlp
+    in_dim: 4096
+    hidden_dim: 2048
+    out_dim: 4096
+
+exp_name: finetune_arc4_24layers_ftB

@@ -9,3 +9,4 @@ requirements.txt
 config
 scripts/*old.sh
 tests.ipynb
+logs/

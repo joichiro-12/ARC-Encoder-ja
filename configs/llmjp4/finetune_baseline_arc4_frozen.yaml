@@ -1,0 +1,65 @@
+# Baseline: the released ARC4 encoder stays frozen; only a new MLP and the special tokens learn to feed
+# llm-jp-4-8b-instruct (same recipe as adding OLMo 7B in the paper, Appendix C.2).
+data:
+  prefix_path: ${DATA_PATH}
+  eval_data: ''
+  train_data: finetune/autowikiqa.jsonl:48:5,finetune/extraction.jsonl:32:5,finetune/wiki_summary.jsonl:10:5,finetune/ja_to_en.jsonl:10:5
+  interleave: true
+  instruct: true
+  max_passages: 4
+  language: ja
+
+run_dir: ${TMP_PATH}
+llm_paths:
+- ${MODEL_PATH}llm-jp-4-8b-instruct
+llm_types:
+- llmjp4
+embedder_path: ${MODEL_PATH}Llama3.2-3B-hf
+embedder_type: llama_hf
+
+freeze_embedder: true
+prob_forward:
+- 1.0
+continuation: 0.0
+bf16_compute: true
+num_microbatches: 1
+seed: 0
+max_steps: 8000
+seq_len: 1024
+log_freq: 10
+batch_size: 8
+ckpt_freq: 1000
+no_eval: true
+optim:
+  final_lr: 1.0e-08
+  initial_lr: 1.0e-20
+  max_lr: 1.0e-04
+  max_lr_projector: 1.0e-04
+  warm_up_steps: 100
+  weight_decay: 0.05
+
+from_ckpt:
+  do: true
+  embedder_path: ${TMP_PATH}ARC4_Encoder_Llama/checkpoints/checkpoint_080000/embedder/
+
+# ARC-Encoder Specific Parameters
+pipeline:
+  embedder_params:
+    causal_embedder: false
+    compress_rates:
+    - -4
+    n_truncated_layers: 2
+    pooling_module:
+      pool_type: mean_pooled_queries
+      where: before
+    trained_layers: 27
+    train_embedding_mtx: true
+    rec_tok: true
+    cont_tok: true
+  bridge_module:
+    bridge_type: mlp
+    in_dim: 3072
+    hidden_dim: 2048
+    out_dim: 4096
+
+exp_name: finetune_baseline_arc4_frozen

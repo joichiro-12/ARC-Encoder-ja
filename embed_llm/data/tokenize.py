@@ -5,7 +5,8 @@ from embed_llm.models.utils.mistral_tokenizer import MistralTokenizer
 from embed_llm.models.utils.llama_tokenizer import Tokenizer as LlamaTokenizer
 from embed_llm.models.utils.olmo_tokenizer import Tokenizer as OlmoTokenizer
 from embed_llm.data.utils import (
-    TEMPLATES_FOR_QA,
+    PROMPT_LABELS,
+    PromptLabels,
 )
 
 logger = logging.getLogger("tokenize")
@@ -44,6 +45,7 @@ def encode(
     max_passages: int = 1,
     instruct: bool = False,
     instruct_decoder: bool = False,
+    labels: PromptLabels = PROMPT_LABELS["en"],
 ) -> TokenSample | None:
     return get_sample(
         data,
@@ -52,6 +54,7 @@ def encode(
         max_passages,
         instruct,
         instruct_decoder=instruct_decoder,
+        labels=labels,
     )
 
 
@@ -62,6 +65,7 @@ def get_sample(
     max_passages: int = 1,
     instruct: bool = False,
     instruct_decoder: bool = False,
+    labels: PromptLabels = PROMPT_LABELS["en"],
 ) -> str:
     if instruct:
         question = data.get("question", "")
@@ -101,7 +105,7 @@ def get_sample(
                 answer, bos=False, eos=True if not instruct_decoder else False
             )
         else:
-            question = random.choice(TEMPLATES_FOR_QA).format(question=question)
+            question = labels.qa_template.format(question=question)
             q_tokens = llm_tokenizer.tokenizer.encode(question, bos=False, eos=False)
             a_tokens = llm_tokenizer.tokenizer.encode(
                 answer, bos=False, eos=True if not instruct_decoder else False

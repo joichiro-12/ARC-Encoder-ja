@@ -1,0 +1,17 @@
+#!/bin/bash
+# Training on one node of ABCI. The queue, the job name and the config come from qsub:
+#   qsub -q rt_HF -N 0374_arc_pre16 -v CONFIG=configs/llmjp4/pretrain_arc8_16layers.yaml scripts/llmjp4/train.pbs
+#PBS -P gcg51557
+#PBS -l select=1
+#PBS -l walltime=72:00:00
+#PBS -j oe
+#PBS -o logs/
+set -eu
+cd "$PBS_O_WORKDIR"
+source /etc/profile.d/modules.sh
+module load cuda/12.6
+source scripts/llmjp4/env.sh
+export HF_HUB_OFFLINE=1
+echo "===== $(date) $(hostname) $(git rev-parse --short HEAD) $CONFIG"
+.venv/bin/torchrun --nproc-per-node 8 -m train "$CONFIG"
+date

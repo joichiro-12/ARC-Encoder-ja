@@ -62,6 +62,8 @@ class TrainArgs(Serializable):
     # Name of the wandb run, if None it will be set to the name of the run_dir.
     data: DataArgs
 
+    # Family of the encoder backbone: "llama" or "llmjp4". It decides the encoder tokenizer.
+    embedder_type: str = "llama"
     exp_name: str | None = None
     optim: OptimArgs = field(default_factory=OptimArgs)
     seed: int = 0
@@ -95,6 +97,9 @@ class TrainArgs(Serializable):
     # Pretrained embedder to use off the shelf
     pipeline: PipelineArgs = field(default_factory=PipelineArgs)
     mixed_precision: bool = True
+    # With mixed_precision, keep the weights in float32 for the optimizer and compute in bfloat16.
+    # A pretraining step on H200 took 1.24 s instead of 7.47 s, with the same loss (docs/llmjp4.md).
+    bf16_compute: bool = False
     from_ckpt: CkptArgs = field(default_factory=CkptArgs)
     fair_instruct: bool = False  # If True, the model will be trained with fair-instruct. (each sample is used several, one for every decoder)
 
